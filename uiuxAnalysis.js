@@ -117,7 +117,7 @@ class ScreenshotAnalyzer {
                                 4. Navigation and user flow
                                 5. Color contrast and accessibility
                                 6. Content readability
-                                Please provide actionable recommendations.`
+                                Respond with actionable recommendations only. Avoid prefacing or additional context.`
                             },
                             {
                                 type: "image_url",  // Changed from 'image' to 'image_url'
