@@ -251,6 +251,62 @@ class WebsiteAuditor {
         }
     }
 
+
+    async analyzeBacklinks(url) {
+        const browser = await puppeteer.launch({ headless: 'new' });
+        try {
+            const page = await browser.newPage();
+            await page.goto(url, { waitUntil: 'networkidle0' });
+    
+            const links = await page.evaluate(() => {
+                return Array.from(document.getElementsByTagName('a'))
+                    .map(link => ({
+                        href: link.href,
+                        text: link.innerText.trim()
+                    }))
+                    .filter(link => link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('#'));
+            });
+    
+            // Check status codes for each link
+            const brokenLinks = [];
+            for (const link of links) {
+                try {
+                    const response = await fetch(link.href, { method: 'HEAD' });
+                    const statusCode = response.status;
+                    
+                    if (statusCode >= 400) {
+                        brokenLinks.push({
+                            url: link.href,
+                            statusCode,
+                            anchorText: link.text
+                        });
+                    }
+                } catch (error) {
+                    // If fetch fails, consider it a broken link
+                    brokenLinks.push({
+                        url: link.href,
+                        statusCode: 'Connection failed',
+                        anchorText: link.text,
+                        error: error.message
+                    });
+                }
+            }
+    
+            return {
+                totalChecked: links.length,
+                brokenLinks: brokenLinks
+            };
+        } catch (error) {
+            this._log(`Backlink analysis failed: ${error.message}`, 'error');
+            return {
+                totalChecked: 0,
+                brokenLinks: []
+            };
+        } finally {
+            await browser.close();
+        }
+    }
+
     async generateFullReport(url) {
         this._log(`Starting full website audit for ${url}`);
     
@@ -275,6 +331,9 @@ class WebsiteAuditor {
     
             const pwaReadiness = await this.analyzePWAReadiness(url);
             this._log('PWA readiness analysis completed');
+
+            const backlinks = await this.analyzeBacklinks(url);
+            this._log('Backlink analysis completed');
     
             const report = {
                 url,
@@ -291,10 +350,11 @@ class WebsiteAuditor {
                         formValidation,
                         pwaReadiness,
                         thirdPartyServices,
+                        backlinks
                     },
                 },
     
-                overallScore: this._calculateOverallScore(performance, security),
+                // overallScore: this._calculateOverallScore(performance, security),
             };
     
             // Save report with timestamp
